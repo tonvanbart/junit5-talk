@@ -25,6 +25,21 @@ style: |
     background-size: contain;
     background-repeat: no-repeat;
   }
+  section.two-columns {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+  }
+  section.two-columns h1, h2, h3, p {
+    grid-column: span 2;
+  }
+  section.two-columns pre {
+    margin: 0;
+  }
+  section.centered-image img {
+    display: block;
+    margin: 0 auto;
+  }
 ---
 <!-- _class: lead  -->
 # JUnit5 extensions
@@ -122,6 +137,69 @@ There are 5 main types of extension points. For our extension, we are interested
 * conditional test execution: the tests only run on GraalVM.
 * lifecycle callbacks so we can set the test driver up before the test, and clean up afterwards.
 -->
+
+---
+<!-- _class: two-columns -->
+### Passing information to the extension
+Custom annotations for KSML test methods
+```java
+@Retention(RetentionPolicy.RUNTIME)
+@Target(ElementType.METHOD)
+@Test
+public @interface KSMLTest {
+
+    String NO_SCHEMAS = "";
+
+    String topology();
+
+    String schemapath() default NO_SCHEMAS;
+
+    KSMLTopic[] inputTopics();
+
+    KSMLTopic[] outputTopics();
+
+    String testDriverRef() default "";
+}
+```
+
+```java
+@Retention(RetentionPolicy.RUNTIME)
+@Target(ElementType.PARAMETER)
+public @interface KSMLTopic {
+
+    String variable();
+
+    String topic();
+
+    SerdeType keySerde() default SerdeType.STRING;
+
+    SerdeType valueSerde() default SerdeType.STRING;
+
+    enum SerdeType { STRING, AVRO }
+}
+
+```
+<!-- 
+Adding a custom annotation so we can tell the extension which KSML file to load, and which topics to 
+attach to which variable. Note @Target(PARAMETER) on the right so KSMLTopic on the left has multiple fields.
+-->
+---
+### How this will look in practice
+```java
+    TestInputTopic inputTopic;
+
+    TestOutputTopic output0;
+
+    TestOutputTopic output1;
+
+    @KSMLTest(topology = "pipelines/test-routing.yaml",
+            inputTopics = {@KSMLTopic(variable = "inputTopic", topic = "test_input")},
+            outputTopics = {@KSMLTopic(variable = "output0", topic = "test_output0"),
+                            @KSMLTopic(variable = "output1", topic = "test_output1")
+            }
+    )
+    void testRouting() {
+```
 
 ---
 ### Conditional test execution
@@ -259,6 +337,10 @@ public class KSMLRoutingTest {
         // write data to inputTopic, verify output topics
 ```
 Works, but verbose annotation and duplicated names
+<!-- 
+This solution works but the annotation becomes unwieldy. Also the string argument "topic" has to line
+up with the variable names, which can be error prone. Adding AVRO and a TopologyTestDriver reference does not help
+-->
 
 ---
 ### Second iteration of extension
@@ -280,3 +362,60 @@ public class KSMLRoutingTest {
     void testRouting() {
         // write data to inputTopic, verify output topics
 ```
+Much nicer! 
+<!-- 
+The basic processing of the extension has not changed. It's now using reflection to find variables
+of type TestInputTopic and TestOutputTopic and checking if they are annotated. Same for TopologyTestDriver.
+-->
+
+---
+### Wait, but there's one more thing...
+
+* TMTOWTDI - There's more than one way to do things in KSML
+* operation aliases and `expression` vs `code` for example
+* we can only test one definition per test method
+* could we have parameterized KSML tests?
+```java
+    @KSMLTopologyTest(
+            topologies = {
+                    "pipelines/test-mapvalue-expression.yaml",
+                    "pipelines/test-mapvalues-expression.yaml",
+                    "pipelines/test-transformvalue-expression.yaml",
+                    "pipelines/test-mapvalues-code.yaml",
+                    "pipelines/test-transformvalue-code.yaml"},
+            schemaDirectory = "schemas")
+    @DisplayName("Values can be mapped with mapValue and aliases")
+    void testMapValueByExpression() {
+
+```
+---
+### Annotation for parameterized tests
+```java
+@Target({ElementType.ANNOTATION_TYPE, ElementType.METHOD})
+@Retention(RetentionPolicy.RUNTIME)
+@TestTemplate
+@ExtendWith(KSMLTopologyTestContextProvider.class)
+public @interface KSMLTopologyTest {
+
+    String NO_SCHEMAS = "";
+    String NO_MODULES = "";
+
+    String[] topologies();
+
+    String schemaDirectory() default NO_SCHEMAS;
+
+    String modulesDirectory() default NO_MODULES;
+
+}
+
+```
+<!-- 
+The main thing about the annotation is the addition of KSMLTopologyTestContextProvider.
+This kicks off a multi step process illustrated in the following slide
+-->
+
+---
+<!-- _class: centered-image -->
+### Steps to get to a configured test context
+
+![w:100%](./out/parameterized-test/parameterized-test.svg)

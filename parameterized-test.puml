@@ -1,0 +1,19 @@
+@startuml
+'https://plantuml.com/activity-diagram-beta
+
+- KSMLTopologyTest
+:KSMLTopologyTestContextProvider
+    - provideTestTemplateInvocationContexts();
+floating note right
+returns stream of 
+""TestTemplateInvocationContext""
+end note    
+:KSMLTopologyTestInvocationContext
+    - getAdditionalExtensions();
+floating note right
+returns ""List<Extension>""
+end note
+- KSMLTopologyTestExtension
+
+
+@enduml
