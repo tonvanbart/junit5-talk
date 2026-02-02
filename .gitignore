@@ -1,0 +1,3 @@
+# ignore exported presentation
+*.html
+*.pdf
