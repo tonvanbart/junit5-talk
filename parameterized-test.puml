@@ -5,8 +5,8 @@
 :KSMLTopologyTestContextProvider
     - provideTestTemplateInvocationContexts();
 floating note right
-returns stream of 
-""TestTemplateInvocationContext""
+returns 
+""Stream<TestTemplateInvocationContext>""
 end note    
 :KSMLTopologyTestInvocationContext
     - getAdditionalExtensions();
