@@ -136,6 +136,9 @@ public class KSMLTestExtension implements ExecutionCondition, BeforeAllCallback,
 There are 5 main types of extension points. For our extension, we are interested in
 * conditional test execution: the tests only run on GraalVM.
 * lifecycle callbacks so we can set the test driver up before the test, and clean up afterwards.
+HOWEVER, the extension needs to get some information about
+the test: which yaml file, which topic is which variable, AVRO schema directory if present, etc. We can do this by adding 
+a method level annotation.
 -->
 
 ---
@@ -200,7 +203,11 @@ attach to which variable. Note @Target(PARAMETER) on the right so KSMLTopic on t
     )
     void testRouting() {
 ```
-
+<!-- 
+This is how an annotated test method will look like.
+We need a TestInputTopic for topic test_input, and variable
+inputTopic should refer to that, etc.
+-->
 ---
 ### Conditional test execution
 Verify that the test is running on GraalVM.
@@ -222,6 +229,7 @@ Verify that the test is running on GraalVM.
 
 ```
 <!-- 
+KSML needs GraalVM (polyglot) runtime to run.
 This extension point gets called once for the test class, and once for each test method. We're checking on the
 global level, and disable the test as a whole if not on Graal.
 -->
@@ -240,7 +248,9 @@ Set up some data notations (one time)
     }
 ```
 <!-- 
-Here we set up some KSML internals
+Here we set up some KSML internals. Since this happens in 
+a static way (NotationLibrary) we do this once.
+This is equivalent to a @BeforeAll annotated method.
 -->
 
 ---
@@ -270,6 +280,11 @@ Here we set up some KSML internals
         var topologyGenerator = new TopologyGenerator(methodName + ".app");
         final var topology = topologyGenerator.create(streamsBuilder, definitions);
 ```
+<!-- 
+This is the equivalent of a @beforeEach annotated method.
+Read the annotation on the method and start by creating 
+the topology.
+-->
 ---
 ### Lifecycle callbacks (continued)
 Create test driver, input and output topics, set variables
@@ -291,6 +306,10 @@ Create test driver, input and output topics, set variables
         modifiedFields.add(inputTopicField);
     }
 ```
+<!-- 
+Read the aanotation parameters, create topics and assign
+variables using reflection.
+-->
 ---
 ### Lifecycle callbacks (continued)
 After the test, clean up after ourselves!
@@ -315,6 +334,11 @@ After the test, clean up after ourselves!
         modifiedFields.clear();
     }
 ```
+<!-- 
+This is the equivalent of a method annotated with @AfterEach.
+Since variables may have been dirtied we set them all to null
+in preparation of the next test.
+-->
 ---
 ### First working iteration of extension
 ```java
@@ -338,7 +362,7 @@ public class KSMLRoutingTest {
 ```
 Works, but verbose annotation and duplicated names
 <!-- 
-This solution works but the annotation becomes unwieldy. Also the string argument "topic" has to line
+This solution now works but the annotation becomes unwieldy. Also the string argument "topic" has to line
 up with the variable names, which can be error prone. Adding AVRO and a TopologyTestDriver reference does not help
 -->
 
@@ -419,3 +443,13 @@ This kicks off a multi step process illustrated in the following slide
 ### Steps to get to a configured test context
 
 ![w:100%](./out/parameterized-test/parameterized-test.svg)
+
+<!-- 
+Outline the steps up to the invocation context adding an 
+extension on the fly.
+This is the same extension, but it gets the parameters as 
+constructor arguments (different per invocation)
+-->
+
+---
+### Conclusions
