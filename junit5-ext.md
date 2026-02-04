@@ -1,7 +1,7 @@
 ---
 marp: true
 theme: gaia
-paginate: true
+paginate: false
 # class: invert
 style: |
   pre {
@@ -111,7 +111,7 @@ superclass but that idea won't fly.
 ### Could we use an extension to:
 
 * verify test is running on GraalVM
-* set up some data notations
+* set up some initializations (data notations)
 * set up AVRO schema directory if desired
 * get the KSML file, load it and create topology
 * create a topology test driver for the topology
@@ -227,7 +227,7 @@ global level, and disable the test as a whole if not on Graal.
 -->
 
 ---
-### Lifecycle callbacks
+### One time initializations
 Set up some data notations (one time)
 ```java
     @Override
@@ -240,11 +240,13 @@ Set up some data notations (one time)
     }
 ```
 <!-- 
-Here we set up some KSML internals
+Here we set up some KSML internals. Notations are the way KSML converts from external data to its
+internal data formats.
+This is the equivalent of a @BeforeAll annotated method.
 -->
 
 ---
-#### Lifecycle callbacks (continued)
+#### Pre-test initialization
 ```java
     @Override
     public void beforeEach(ExtensionContext extensionContext) throws Exception {
@@ -270,8 +272,13 @@ Here we set up some KSML internals
         var topologyGenerator = new TopologyGenerator(methodName + ".app");
         final var topology = topologyGenerator.create(streamsBuilder, definitions);
 ```
+<!-- 
+Start by determining if we need to do anything as this callback is executed at different points.
+This is the equivalent of @BeforeEach annotated method.
+Start by getting some arguments and set up a topology.
+-->
 ---
-### Lifecycle callbacks (continued)
+### Pre-test initialization (continued)
 Create test driver, input and output topics, set variables
 ```java
     topologyTestDriver = new TopologyTestDriver(topology);
@@ -291,8 +298,11 @@ Create test driver, input and output topics, set variables
         modifiedFields.add(inputTopicField);
     }
 ```
+<!-- 
+Once we have the topology we can create the test driver and use that to create in- and output topics.
+-->
 ---
-### Lifecycle callbacks (continued)
+### After test cleanup
 After the test, clean up after ourselves!
 ```java
     @Override
@@ -315,6 +325,9 @@ After the test, clean up after ourselves!
         modifiedFields.clear();
     }
 ```
+<!-- 
+Variables are "dirtied" and may need to be reused in another test method, so clear the fields.
+-->
 ---
 ### First working iteration of extension
 ```java
@@ -367,7 +380,12 @@ Much nicer!
 The basic processing of the extension has not changed. It's now using reflection to find variables
 of type TestInputTopic and TestOutputTopic and checking if they are annotated. Same for TopologyTestDriver.
 -->
-
+---
+<!-- _class: lead -->
+# Demo
+<!-- 
+Demo single test
+-->
 ---
 ### Wait, but there's one more thing...
 
@@ -471,6 +489,7 @@ public record KSMLTopologyTestInvocationContext(...) implements TestTemplateInvo
 
 ```java
 public class KSMLTopologyTestExtension implements ExecutionCondition, BeforeEachCallback, AfterEachCallback {
+    // lifecycle methods as before
 ```
 <!-- 
 Finally the test invocation context adds the test extension on the fly.
@@ -479,6 +498,9 @@ constructor arguments.
 The actual extension processing (testdriver setup, etcetera) is the same as before.
 -->
 
+---
+<!-- _class: lead -->
+# Demo
 ---
 ### Summary
 #### "for fun and profit"?
