@@ -81,9 +81,10 @@ pipelines:
 ```
 <!-- 
 * An example. We would like automated tests for this
-* There are a lot of KSML operations
+* There are a lot of KSML operations (filter, map, flatmap, joins, grouping etc)
 * some have multiple variants: code, expression
 What could we do?
+There is a thing called TopologyTestDriver.
 -->
 ---
 ### Solution: Kafka TopologyTestDriver
@@ -150,6 +151,8 @@ There are 5 main types of extension points. For our extension, we are interested
 * conditional test execution: the tests only run on GraalVM.
 * lifecycle callbacks so we can set the test driver up before the test, and clean up afterwards.
 The others were not investigated (much).
+We also need to tell our extension which yaml file, where AVRO schemas, and somehow know which
+topic variables to set to which topics (in the yaml file).
 -->
 
 ---
@@ -213,6 +216,7 @@ attach to which variable. Note @Target(PARAMETER) on the right so KSMLTopic on t
             }
     )
     void testRouting() {
+        // send some data and do some asserts on the output.
 ```
 <!-- 
 With this code in place, an annotated test method will look like this.
@@ -241,6 +245,7 @@ Verify that the test is running on GraalVM.
 Lets go over the lifecycle methods. This is "conditional test execution".
 This extension point gets called once for the test class, and once for each test method. We're checking on the
 global level, and disable the test as a whole if not on Graal. 
+There is no annotation equivalent of this, it would be something like @EnabledIf I guess.
 -->
 
 ---
@@ -260,6 +265,7 @@ Set up some data notations (one time)
 Here we set up some KSML internals. Notations are the way KSML converts from external data to its
 internal data formats.
 This is the equivalent of a @BeforeAll annotated method.
+The logic was gleaned from the KSML runner logic and adjusted.
 -->
 
 ---
@@ -318,6 +324,10 @@ Create test driver, input and output topics, set variables
 <!-- 
 Once we have the topology we can create the test driver and use that to create in- and output topics.
 Continuation of @BeforeEach from the previous slide.
+Since we are not in a @BeforeEach method here we have to use reflection to get the variables in the test
+and set them to the instances we create.
+
+After all of this, the test method gets executed.
 -->
 ---
 ### After test cleanup
@@ -402,18 +412,38 @@ of type TestInputTopic and TestOutputTopic and checking if they are annotated. S
 If we want a reference the extension can set it (not show, but similar: annotated field)
 -->
 ---
+### Scanning the variables
+```java
+final var requiredTestClass = extensionContext.getRequiredTestClass();
+final var declaredFields = requiredTestClass.getDeclaredFields();
+Arrays.stream(declaredFields).forEach(field -> {
+    final var type = field.getType();
+    if (type.equals(TestInputTopic.class) && field.isAnnotationPresent(KSMLTopic.class)) {
+        final var ksmlTopic = field.getAnnotation(KSMLTopic.class);
+        log.debug("Found annotated input topic field {}:{}", field.getName(), ksmlTopic);
+        inputTopics.put(field.getName(), ksmlTopic);
+    } else if (type.equals(TestOutputTopic.class) && field.isAnnotationPresent(KSMLTopic.class)) {
+        // similar logic
+```
+Scan variables logic in beforeAll()
+<!-- 
+quick impression of how the extension scans the test class variables by type and annotation.
+we read the variable and annotation and store in a table.
+@KSMLTopic has the topic name from the YAML and some serialization info (AVRO or not)
+The scan happens in beforeAll() so it is a one time thing (per test class ofc)
+-->
+---
 <!-- _class: lead -->
 # Demo
+See it in action
 <!-- 
 Demo single test
+So, job well done, we're finished!
+Or are we?
+I'm finding I repeat the same test method for slightly different pipeline definitions.
 -->
 ---
 ### Wait, but there's one more thing...
-
-* TMTOWTDI - There's more than one way to do things in KSML
-* operation aliases and `expression` vs `code` for example
-* we can only test one definition per test method
-* could we have parameterized KSML tests?
 ```java
     @KSMLTopologyTest(
             topologies = {
@@ -427,8 +457,13 @@ Demo single test
     void testMapValueByExpression() {
 
 ```
+
+* TMTOWTDI - There's more than one way to do things in KSML
+* operation aliases and `expression` vs `code` for example
+* we can only test one definition per test method
+* could we have parameterized KSML tests?
 <!-- 
-In use, I find I keep repeating the same test just for a different pipeline.
+In use, I find I keep repeating the same test just for a different pipeline. Not so nice.
 Lets look at @ParameterizedTest and see if we can come up with something similar.
 -->
 ---
@@ -464,9 +499,9 @@ This kicks off a multi step process illustrated in the following slide
 ![w:100%](./out/parameterized-test/parameterized-test.svg)
 
 <!-- 
-The annotation pulls in KSMLRTopologyTestContextProvider. This class should produce one test
+The annotation pulls in KSMLTopologyTestContextProvider. This class should produce one test execution
 context for each time the test method is invoked. The test context in turn can programmatically add an extension
-to the test so that we can have processing for @KSMLTopic etcetera.
+to the test so that we can have processing for @KSMLTopic etcetera. Note extension is instantiated each time.
 -->
 ---
 ### create TestTemplateInvocationContext
@@ -531,6 +566,8 @@ The actual extension processing (testdriver setup, etcetera) is the same as befo
 ---
 <!-- _class: lead -->
 # Demo
+See it in action
+
 ---
 ### Summary
 #### "for fun and profit"?
