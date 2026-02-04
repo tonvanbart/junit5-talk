@@ -52,6 +52,12 @@ style: |
 * Uses @KSMLTestExtension as an example
 * We'll skip over KSML internals where we can
 
+<!-- 
+Talk about how and why JUnit 5 extensions, using @KSMLTestExtension as an example. 
+We won't dive into the internals of KSML.
+We all know about KSML: Kafka streams using YAML and Python
+-->
+
 ---
 ## The challenge
 ```yaml
@@ -74,9 +80,10 @@ pipelines:
 
 ```
 <!-- 
-* We would like automated tests for this
+* An example. We would like automated tests for this
 * There are a lot of KSML operations
 * some have multiple variants: code, expression
+What could we do?
 -->
 ---
 ### Solution: Kafka TopologyTestDriver
@@ -118,6 +125,11 @@ superclass but that idea won't fly.
 * create TestInputTopic, TestOutputTopic instances
 * set variable references so that the test can use them
 
+<!-- 
+Extension should check Graal, do some one time setup, maybe AVRO, load KSML and create topology.
+Then create test driver and topics and make them available to the test code.
+-->
+
 ---
 ### JUnit5 extensions
 
@@ -133,9 +145,11 @@ Five main types of callback interfaces:
 public class KSMLTestExtension implements ExecutionCondition, BeforeAllCallback, BeforeEachCallback, AfterEachCallback
 ```
 <!-- 
+A JUnit5 extension might help.
 There are 5 main types of extension points. For our extension, we are interested in
 * conditional test execution: the tests only run on GraalVM.
 * lifecycle callbacks so we can set the test driver up before the test, and clean up afterwards.
+The others were not investigated (much).
 -->
 
 ---
@@ -180,7 +194,7 @@ public @interface KSMLTopic {
 
 ```
 <!-- 
-Adding a custom annotation so we can tell the extension which KSML file to load, and which topics to 
+Lets add a custom annotation so we can tell the extension which KSML file to load, and which topics to 
 attach to which variable. Note @Target(PARAMETER) on the right so KSMLTopic on the left has multiple fields.
 -->
 ---
@@ -200,7 +214,9 @@ attach to which variable. Note @Target(PARAMETER) on the right so KSMLTopic on t
     )
     void testRouting() {
 ```
-
+<!-- 
+With this code in place, an annotated test method will look like this.
+-->
 ---
 ### Conditional test execution
 Verify that the test is running on GraalVM.
@@ -222,8 +238,9 @@ Verify that the test is running on GraalVM.
 
 ```
 <!-- 
+Lets go over the lifecycle methods. This is "conditional test execution".
 This extension point gets called once for the test class, and once for each test method. We're checking on the
-global level, and disable the test as a whole if not on Graal.
+global level, and disable the test as a whole if not on Graal. 
 -->
 
 ---
@@ -300,6 +317,7 @@ Create test driver, input and output topics, set variables
 ```
 <!-- 
 Once we have the topology we can create the test driver and use that to create in- and output topics.
+Continuation of @BeforeEach from the previous slide.
 -->
 ---
 ### After test cleanup
@@ -327,6 +345,7 @@ After the test, clean up after ourselves!
 ```
 <!-- 
 Variables are "dirtied" and may need to be reused in another test method, so clear the fields.
+Equivalent of @AfterEach annotated method.
 -->
 ---
 ### First working iteration of extension
@@ -353,6 +372,7 @@ Works, but verbose annotation and duplicated names
 <!-- 
 This solution works but the annotation becomes unwieldy. Also the string argument "topic" has to line
 up with the variable names, which can be error prone. Adding AVRO and a TopologyTestDriver reference does not help
+with readbility. There is room for improvement using reflection from the extension to manipulate the test class.
 -->
 
 ---
@@ -379,6 +399,7 @@ Much nicer!
 <!-- 
 The basic processing of the extension has not changed. It's now using reflection to find variables
 of type TestInputTopic and TestOutputTopic and checking if they are annotated. Same for TopologyTestDriver.
+If we want a reference the extension can set it (not show, but similar: annotated field)
 -->
 ---
 <!-- _class: lead -->
@@ -406,6 +427,10 @@ Demo single test
     void testMapValueByExpression() {
 
 ```
+<!-- 
+In use, I find I keep repeating the same test just for a different pipeline.
+Lets look at @ParameterizedTest and see if we can come up with something similar.
+-->
 ---
 ### Annotation for parameterized tests
 ```java
@@ -438,6 +463,11 @@ This kicks off a multi step process illustrated in the following slide
 
 ![w:100%](./out/parameterized-test/parameterized-test.svg)
 
+<!-- 
+The annotation pulls in KSMLRTopologyTestContextProvider. This class should produce one test
+context for each time the test method is invoked. The test context in turn can programmatically add an extension
+to the test so that we can have processing for @KSMLTopic etcetera.
+-->
 ---
 ### create TestTemplateInvocationContext
 ```java
@@ -464,8 +494,8 @@ public class KSMLTopologyTestContextProvider implements TestTemplateInvocationCo
 
 ```
 <!-- 
-Processing is different since a new extension is created for every onvocation, but we want to 
-keep the reflection usage one time only. So we move it here and pass the found data on in invocation contexts.
+Processing is different since a new extension is created for every invocation, but we want to 
+keep the reflection usage one time only (expensive!). So we move it here and pass the found data on in invocation contexts.
 The logic to extract the data is similar to the test extension shown above.
 -->
 
