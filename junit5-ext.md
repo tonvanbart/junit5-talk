@@ -442,6 +442,7 @@ Demo single test
 So, job well done, we're finished!
 Or are we?
 I'm finding I repeat the same test method for slightly different pipeline definitions.
+Ctrl-shift-R run the test
 -->
 ---
 ### Wait, but there's one more thing...
