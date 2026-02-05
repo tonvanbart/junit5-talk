@@ -437,6 +437,7 @@ The scan happens in beforeAll() so it is a one time thing (per test class ofc)
 # Demo
 See it in action
 <!-- 
+Ctrl-1: show the test code, ctrl-2: show one pipeline
 Demo single test
 So, job well done, we're finished!
 Or are we?
@@ -567,6 +568,9 @@ The actual extension processing (testdriver setup, etcetera) is the same as befo
 <!-- _class: lead -->
 # Demo
 See it in action
+<!-- 
+Ctrl-3: tet code, Ctrl-4: one pipeline
+-->
 
 ---
 ### Summary
